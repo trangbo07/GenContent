@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL")
+}
+
+model Script {
+  id          String       @id @default(cuid())
+  title       String
+  editionType EditionType  @map("edition_type")
+  content     String       @db.Text
+  wordCount   Int          @default(0) @map("word_count")
+  version     Int          @default(1)
+  status      ScriptStatus @default(DRAFT)
+  aiProvider  String       @default("gemini") @map("ai_provider")
+  aiModel     String       @default("gemini-2.5-flash") @map("ai_model")
+  metadata    Json?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("scripts")
+}
+
+model Job {
+  id           String    @id @default(cuid())
+  jobType      JobType   @map("job_type")
+  status       JobStatus @default(PENDING)
+  startedAt    DateTime? @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
+  errorMessage String?   @db.Text @map("error_message")
+  metadata     Json?
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@map("jobs")
+}
+
+model News {
+  id          String   @id @default(cuid())
+  title       String
+  content     String   @db.Text
+  source      String
+  url         String?
+  hotScore    Int      @default(0) @map("hot_score")
+  category    String?
+  publishedAt DateTime @map("published_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("news")
+}
+
+model Match {
+  id          String      @id @default(cuid())
+  externalId  String?     @unique @map("external_id")
+  homeTeam    String      @map("home_team")
+  awayTeam    String      @map("away_team")
+  homeScore   Int?        @map("home_score")
+  awayScore   Int?        @map("away_score")
+  matchTime   DateTime    @map("match_time")
+  status      MatchStatus @default(SCHEDULED)
+  competition String
+  venue       String?
+  referee     String?
+  statistics  Json?
+  events      Json?
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@map("matches")
+}
+
+enum EditionType {
+  MORNING
+  EVENING
+  MANUAL
+}
+
+enum ScriptStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum JobType {
+  MORNING_EDITION
+  EVENING_EDITION
+  MANUAL_GENERATION
+  DATA_FETCH
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  FINISHED
+  POSTPONED
+  CANCELLED
+}
