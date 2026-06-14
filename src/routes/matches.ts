@@ -1,7 +1,49 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { supabase } from '../lib/supabase';
+import { fetchTodayMatches, syncMatchesToDB } from '../services/footballService';
+import { buildMatchResultsSummary } from '../services/matchSummaryService';
 
 export const matchesRouter = Router();
+
+matchesRouter.get('/summary', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    let matches = await fetchTodayMatches();
+    syncMatchesToDB(matches).catch(console.error);
+
+    if (matches.length === 0) {
+      const today = new Date().toISOString().split('T')[0];
+      const start = new Date(today);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(today);
+      end.setHours(23, 59, 59, 999);
+
+      const { data } = await supabase
+        .from('matches')
+        .select('*')
+        .gte('match_time', start.toISOString())
+        .lte('match_time', end.toISOString())
+        .order('match_time', { ascending: true });
+
+      matches = (data || []).map((row) => ({
+        externalId: row.external_id,
+        homeTeam: row.home_team,
+        awayTeam: row.away_team,
+        homeScore: row.home_score,
+        awayScore: row.away_score,
+        matchTime: new Date(row.match_time),
+        status: row.status,
+        competition: row.competition,
+        venue: row.venue || '',
+        statistics: row.statistics || {},
+        events: row.events || [],
+      }));
+    }
+
+    res.json(buildMatchResultsSummary(matches));
+  } catch (err) {
+    next(err);
+  }
+});
 
 matchesRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {

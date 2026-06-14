@@ -1,7 +1,44 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { supabase } from '../lib/supabase';
+import { fetchNewsFromFeeds, syncNewsToDB } from '../services/newsService';
 
 export const newsRouter = Router();
+
+newsRouter.post('/sync', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const fresh = await fetchNewsFromFeeds();
+    await syncNewsToDB(fresh);
+
+    const since = new Date();
+    since.setHours(since.getHours() - 24);
+
+    const { data, error } = await supabase
+      .from('news')
+      .select('*')
+      .gte('published_at', since.toISOString())
+      .order('published_at', { ascending: false })
+      .order('hot_score', { ascending: false })
+      .limit(30);
+
+    if (error) throw error;
+
+    const news = (data || []).map((row) => ({
+      id: row.id,
+      title: row.title,
+      content: row.content,
+      source: row.source,
+      url: row.url,
+      hotScore: row.hot_score,
+      category: row.category,
+      publishedAt: row.published_at,
+      createdAt: row.created_at,
+    }));
+
+    res.json({ synced: fresh.length, news });
+  } catch (err) {
+    next(err);
+  }
+});
 
 newsRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -22,6 +59,7 @@ newsRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     const { data, error } = await query
+      .order('published_at', { ascending: false })
       .order('hot_score', { ascending: false })
       .limit(parseInt(String(limit)));
 

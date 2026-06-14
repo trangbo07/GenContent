@@ -46,7 +46,15 @@ export function calculateHotScore(input: ScoringInput): number {
   const moderateMatches = MODERATE_TERMS.filter((t) => text.includes(t));
   score += Math.min(moderateMatches.length * 2, 5);
 
-  // World Cup specific boost
+  // Football / World Cup relevance boost
+  const footballTerms = [
+    'world cup', 'fifa', '2026', 'soccer', 'football', 'premier league',
+    'champions league', 'la liga', 'bundesliga', 'serie a', 'mls',
+    'qualifier', 'knockout', 'penalty', 'striker', 'midfielder',
+  ];
+  const footballHits = footballTerms.filter((t) => text.includes(t));
+  score += Math.min(footballHits.length * 4, 15);
+
   if (text.includes('world cup') || text.includes('fifa') || text.includes('2026')) {
     score += 10;
   }

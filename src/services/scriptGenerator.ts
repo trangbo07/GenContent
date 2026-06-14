@@ -1,8 +1,9 @@
 import { supabase } from '../lib/supabase';
 import { generateScript } from './aiService';
 import { fetchTodayMatches, fetchStandings, syncMatchesToDB } from './footballService';
-import { fetchNewsFromFeeds, syncNewsToDB, getTopNews } from './newsService';
+import { fetchNewsFromFeeds, syncNewsToDB, getTopNews, type NewsItem } from './newsService';
 import { rankNewsItems } from './hotScoreEngine';
+import { buildMatchResultsSummary, formatSummaryForPrompt } from './matchSummaryService';
 
 export type EditionType = 'MORNING' | 'EVENING' | 'MANUAL';
 
@@ -34,15 +35,21 @@ OUTPUT FORMAT
 Pure script text only. Section headers exactly as instructed. Nothing else.
 Total length: 1,500–2,000 words. Broadcast reading pace: ~9–12 minutes.
 
-CRITICAL: You must complete ALL 8 sections before stopping. Never truncate mid-sentence or mid-section. Be concise — quality over quantity. Every section must be present and finished.`;
+CRITICAL: You must complete ALL 9 sections before stopping. Never truncate mid-sentence or mid-section. Be concise — quality over quantity. Every section must be present and finished.`;
 
 interface ScriptContext {
   editionType: EditionType;
   date: string;
   news: Awaited<ReturnType<typeof getTopNews>>;
+  editorPicks: NewsItem[];
   todayMatches: Awaited<ReturnType<typeof fetchTodayMatches>>;
   standings: Awaited<ReturnType<typeof fetchStandings>>;
   previousRecap: string | null;
+  matchSummary: ReturnType<typeof buildMatchResultsSummary>;
+}
+
+export interface GenerateScriptOptions {
+  selectedNewsIds?: string[];
 }
 
 async function fetchPreviousRecap(): Promise<string | null> {
@@ -85,17 +92,15 @@ function buildPrompt(ctx: ScriptContext): string {
     : isEvening ? 'EVENING EDITION — 20:00 UK'
     : 'SPECIAL REPORT';
 
-  const finishedMatches = ctx.todayMatches.filter((m) => m.status === 'FINISHED');
   const liveMatches    = ctx.todayMatches.filter((m) => m.status === 'LIVE');
   const topNews        = rankNewsItems(ctx.news).slice(0, 10);
+  const editorPicks    = ctx.editorPicks;
+
+  const matchSummaryBlock = formatSummaryForPrompt(ctx.matchSummary);
 
   const liveBlock = liveMatches.length
     ? liveMatches.map((m) => `  • ${m.homeTeam} vs ${m.awayTeam} [LIVE NOW]`).join('\n')
     : '  None currently.';
-
-  const resultsBlock = finishedMatches.length
-    ? finishedMatches.map((m) => `  ${m.homeTeam} ${m.homeScore}–${m.awayScore} ${m.awayTeam}`).join('\n')
-    : '  No matches completed yet today.';
 
   const standingsBlock = ctx.standings.length
     ? ctx.standings.slice(0, 16).map((s) =>
@@ -111,6 +116,15 @@ function buildPrompt(ctx: ScriptContext): string {
       ].join('\n')).join('\n\n')
     : '  No news data available — draw on your World Cup 2026 knowledge.';
 
+  const editorPicksBlock = editorPicks.length
+    ? editorPicks.map((n, i) => [
+        `  [PICK ${i + 1}] ★ ${n.hotScore}/100  |  ${n.source}`,
+        `  Headline: ${n.title}`,
+        `  Detail: ${n.content.slice(0, 400).replace(/\n/g, ' ')}`,
+        n.url ? `  Source URL: ${n.url}` : '',
+      ].join('\n')).join('\n\n')
+    : '  No editor picks — use the 3 highest hot-score stories from TOP NEWS above.';
+
   const recapBlock = ctx.previousRecap
     ? `YES — previous edition content below. In SECTION 1, weave in 2–3 of the biggest stories as a natural "In Case You Missed It" handoff (4–6 sentences max, no list format):
 ${ctx.previousRecap}`
@@ -123,8 +137,8 @@ Date    : ${ctx.date}
 ━━━ LIVE RIGHT NOW ━━━
 ${liveBlock}
 
-━━━ TODAY'S RESULTS ━━━
-${resultsBlock}
+━━━ MATCH RESULTS SUMMARY (use for SECTION 3) ━━━
+${matchSummaryBlock}
 
 ━━━ GROUP STANDINGS (top 16) ━━━
 ${standingsBlock}
@@ -132,11 +146,14 @@ ${standingsBlock}
 ━━━ TOP NEWS STORIES (hot score ★/100, highest = most important) ━━━
 ${newsBlock}
 
+━━━ EDITOR'S PICKS — MUST READ ALOUD IN SECTION 4 ━━━
+${editorPicksBlock}
+
 ━━━ PREVIOUS EDITION RECAP ━━━
 Include recap? ${recapBlock}
 
 ═══════════════════════════════════════
-WRITE THE SCRIPT BELOW — 8 SECTIONS
+WRITE THE SCRIPT BELOW — 9 SECTIONS
 Use these exact headers. Strict word targets.
 ═══════════════════════════════════════
 
@@ -146,24 +163,27 @@ Then list exactly 3–4 of today's hottest headlines — each as a single standa
 Then one short bridge sentence into the show. ${ctx.previousRecap ? 'Then 2 sentences max recapping the previous edition.' : ''} Total section: under 80 words.
 
 ## SECTION 2: TOP WORLD CUP HEADLINES
-~300 words. Now deliver the full stories teased in Section 1, in the same order. One paragraph per story — hook, facts, significance. No filler.
+~280 words. Deliver the full stories teased in Section 1, in the same order. One paragraph per story — hook, facts, significance. No filler.
 
-## SECTION 3: MATCH RESULTS
-~150 words. Every completed match, one sentence of colour per result. Fast and vivid.
+## SECTION 3: MATCH RESULTS ROUNDUP
+~250 words. Complete scoreboard summary for the presenter to read on air. Cover EVERY finished match from MATCH RESULTS SUMMARY — home team, away team, exact scoreline, venue if known. Mention live matches in progress with current score if any. If no results yet, preview upcoming fixtures with kick-off times. Fast, authoritative, broadcast-ready — like a sports desk results bulletin.
 
-## SECTION 4: MATCH OF THE DAY
-~400 words. The most important match. Scene-setting, key moments, turning point, standout player, tournament implications. Make the listener feel like they were there.
+## SECTION 4: EDITOR'S NEWS DESK
+~300 words. Read the EDITOR'S PICKS stories aloud as a news anchor. ${editorPicks.length ? `Cover all ${editorPicks.length} editor-selected stories — one flowing paragraph per pick.` : 'Pick the 3 most compelling stories from TOP NEWS and deliver them with broadcast energy.'} Attribute the source naturally ("According to ESPN...", "Reuters reports..."). Make each story feel hand-picked because it matters to World Cup fans.
 
-## SECTION 5: TEAMS & PLAYERS SPOTLIGHT
-~230 words. 2 player/team stories. One sharp paragraph each — specific names, specific moments.
+## SECTION 5: MATCH OF THE DAY
+~350 words. The most important match. Scene-setting, key moments, turning point, standout player, tournament implications. Make the listener feel like they were there.
 
-## SECTION 6: AROUND THE TOURNAMENT
+## SECTION 6: TEAMS & PLAYERS SPOTLIGHT
+~200 words. 2 player/team stories. One sharp paragraph each — specific names, specific moments.
+
+## SECTION 7: AROUND THE TOURNAMENT
 ~150 words. 1 human-interest story. Lighter tone — the show's emotional breath before the finale.
 
-## SECTION 7: WORLD CUP STORY OF THE DAY
-~280 words. One great moment from World Cup history. Connect it naturally to something happening in 2026. This is the signature segment — make it memorable.
+## SECTION 8: WORLD CUP STORY OF THE DAY
+~250 words. One great moment from World Cup history. Connect it naturally to something happening in 2026. This is the signature segment — make it memorable.
 
-## SECTION 8: CLOSING
+## SECTION 9: CLOSING
 ~90 words. Warm, personal, genuine sign-off. Tease the next edition. End on one great line.
 The very last sentence must be a standalone "Thank you" — a broadcaster's farewell.
 
@@ -172,7 +192,10 @@ NOW WRITE. Headers exactly as above. No stage directions. No brackets. Pure scri
 ═══════════════════════════════════════`;
 }
 
-export async function generateNewsScript(editionType: EditionType): Promise<string> {
+export async function generateNewsScript(
+  editionType: EditionType,
+  options: GenerateScriptOptions = {},
+): Promise<string> {
   const jobId = await createJob(editionType);
 
   try {
@@ -197,6 +220,26 @@ export async function generateNewsScript(editionType: EditionType): Promise<stri
 
     const topNews = newsData.length > 0 ? newsData : await getTopNews(20);
 
+    let editorPicks: NewsItem[] = [];
+    if (options.selectedNewsIds?.length) {
+      const { data: picked } = await supabase
+        .from('news')
+        .select('*')
+        .in('id', options.selectedNewsIds);
+
+      editorPicks = (picked || []).map((n) => ({
+        title: n.title,
+        content: n.content,
+        source: n.source,
+        url: n.url || '',
+        publishedAt: new Date(n.published_at),
+        hotScore: n.hot_score,
+        category: n.category || 'general',
+      }));
+    }
+
+    const matchSummary = buildMatchResultsSummary(matches);
+
     const ctx: ScriptContext = {
       editionType,
       date: new Date().toLocaleDateString('en-GB', {
@@ -207,9 +250,11 @@ export async function generateNewsScript(editionType: EditionType): Promise<stri
         timeZone: 'Europe/London',
       }),
       news: topNews,
+      editorPicks,
       todayMatches: matches,
       standings: standingsData,
       previousRecap: recap,
+      matchSummary,
     };
 
     const prompt = buildPrompt(ctx);
@@ -245,6 +290,7 @@ export async function generateNewsScript(editionType: EditionType): Promise<stri
           outputTokens: result.outputTokens,
           matchCount: matches.length,
           newsCount: topNews.length,
+          editorPickCount: editorPicks.length,
           hasPreviousRecap: recap !== null,
         },
         created_at: now,

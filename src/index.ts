@@ -24,7 +24,7 @@ app.use('/api/jobs', jobsRouter);
 app.use(errorHandler);
 
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on https://gencontent-zpei.onrender.com`);
   initScheduler();
 });
 

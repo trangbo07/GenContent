@@ -210,9 +210,10 @@ scriptsRouter.post('/generate/sync', async (req: Request, res: Response, next: N
   try {
     const schema = z.object({
       editionType: z.enum(['MORNING', 'EVENING', 'MANUAL']).default('MANUAL'),
+      selectedNewsIds: z.array(z.string()).optional(),
     });
-    const { editionType } = schema.parse(req.body);
-    const scriptId = await generateNewsScript(editionType);
+    const { editionType, selectedNewsIds } = schema.parse(req.body);
+    const scriptId = await generateNewsScript(editionType, { selectedNewsIds });
     const { data, error } = await supabase.from('scripts').select('*').eq('id', scriptId).single();
     if (error || !data) throw new AppError('Script not found after generation', 500);
     res.json(mapScript(data as Record<string, unknown>));
