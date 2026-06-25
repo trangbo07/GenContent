@@ -6,7 +6,7 @@ export const newsRouter = Router();
 
 newsRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { category, since, limit = '50', lang } = req.query;
+    const { category, since, limit = '50', lang = 'vi' } = req.query;
 
     let query = supabase.from('news').select('*');
 
@@ -14,9 +14,7 @@ newsRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
       query = query.eq('category', category);
     }
 
-    if (lang && typeof lang === 'string') {
-      query = query.eq('lang', lang);
-    }
+    query = query.eq('lang', typeof lang === 'string' ? lang : 'vi');
 
     if (since && typeof since === 'string') {
       query = query.gte('published_at', new Date(since).toISOString());

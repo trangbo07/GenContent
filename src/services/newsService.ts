@@ -10,20 +10,13 @@ const parser = new Parser({
 });
 
 const RSS_FEEDS = [
-  { url: 'https://feeds.bbci.co.uk/sport/football/rss.xml',          source: 'BBC Sport',       lang: 'en' },
-  { url: 'https://www.theguardian.com/football/rss',                  source: 'The Guardian',    lang: 'en' },
-  { url: 'https://www.skysports.com/rss/12040',                       source: 'Sky Sports',      lang: 'en' },
-  { url: 'https://www.espn.com/espn/rss/soccer/news',                 source: 'ESPN FC',         lang: 'en' },
-  { url: 'https://www.mirror.co.uk/sport/football/rss.xml',           source: 'Mirror Football', lang: 'en' },
-  { url: 'https://talksport.com/football/feed/',                      source: 'talkSPORT',       lang: 'en' },
-  // Vietnamese football sources
-  { url: 'https://bongda24h.vn/rss/tin-tuc-bong-da.rss',             source: 'Bongda24h',       lang: 'vi' },
-  { url: 'https://www.bongdaplus.vn/rss/bong-da.rss',                source: 'BongdaPlus',      lang: 'vi' },
-  { url: 'https://vnexpress.net/rss/bong-da.rss',                    source: 'VnExpress Sport', lang: 'vi' },
-  { url: 'https://tuoitre.vn/rss/the-thao.rss',                      source: 'Tuổi Trẻ Sport',  lang: 'vi' },
+  { url: 'https://bongda24h.vn/rss/tin-tuc-bong-da.rss',             source: 'Bongda24h',        lang: 'vi' },
+  { url: 'https://www.bongdaplus.vn/rss/bong-da.rss',                source: 'BongdaPlus',       lang: 'vi' },
+  { url: 'https://vnexpress.net/rss/bong-da.rss',                    source: 'VnExpress Sport',  lang: 'vi' },
+  { url: 'https://tuoitre.vn/rss/the-thao.rss',                      source: 'Tuổi Trẻ Sport',   lang: 'vi' },
   { url: 'https://thanhnien.vn/rss/the-thao.rss',                    source: 'Thanh Niên Sport', lang: 'vi' },
-  { url: 'https://dantri.com.vn/the-thao/bong-da.rss',               source: 'Dân Trí Sport',   lang: 'vi' },
-  { url: 'https://www.goal.com/vn/feeds/news?fmt=rss',               source: 'Goal.com VN',     lang: 'vi' },
+  { url: 'https://dantri.com.vn/the-thao/bong-da.rss',               source: 'Dân Trí Sport',    lang: 'vi' },
+  { url: 'https://www.goal.com/vn/feeds/news?fmt=rss',               source: 'Goal.com VN',      lang: 'vi' },
 ];
 
 export interface NewsItem {
@@ -92,12 +85,12 @@ export async function fetchNewsFromFeeds(): Promise<NewsItem[]> {
 
 function classifyNewsCategory(text: string): string {
   const t = text.toLowerCase();
-  if (t.includes('injur'))                                              return 'injury';
-  if (t.includes('suspend') || t.includes('ban') || t.includes(' card')) return 'suspension';
-  if (t.includes('goal') || t.includes('score') || t.includes('result')) return 'match';
-  if (t.includes('record') || t.includes('milestone') || t.includes('histor')) return 'record';
-  if (t.includes('transfer') || t.includes('squad') || t.includes('lineup'))  return 'squad';
-  if (t.includes('fan') || t.includes('culture') || t.includes('atmosphere'))  return 'human-interest';
+  if (t.includes('chấn thương') || t.includes('injur'))                                                      return 'injury';
+  if (t.includes('thẻ đỏ') || t.includes('thẻ vàng') || t.includes('treo giò') || t.includes('suspend') || t.includes('ban') || t.includes(' card')) return 'suspension';
+  if (t.includes('bàn thắng') || t.includes('tỉ số') || t.includes('kết quả') || t.includes('goal') || t.includes('score') || t.includes('result')) return 'match';
+  if (t.includes('kỷ lục') || t.includes('lịch sử') || t.includes('record') || t.includes('milestone') || t.includes('histor')) return 'record';
+  if (t.includes('chuyển nhượng') || t.includes('đội hình') || t.includes('transfer') || t.includes('squad') || t.includes('lineup')) return 'squad';
+  if (t.includes('cổ động viên') || t.includes('fan') || t.includes('culture') || t.includes('atmosphere')) return 'human-interest';
   return 'general';
 }
 
@@ -133,6 +126,7 @@ export async function getTopNews(limit = 20): Promise<NewsItem[]> {
   const { data } = await supabase
     .from('news')
     .select('*')
+    .eq('lang', 'vi')
     .gte('published_at', since.toISOString())
     .order('hot_score', { ascending: false })
     .limit(limit);
