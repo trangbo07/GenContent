@@ -1,12 +1,17 @@
 import axios from 'axios';
 import JSZip from 'jszip';
 
+export interface ImageOption {
+  url: string;
+  thumbnail: string;
+  alt: string;
+  source: string;
+}
+
 export interface SentenceImage {
   sentence: string;
   keywords: string;
-  imageUrl: string | null;
-  thumbnail: string | null;
-  imageAlt: string;
+  images: ImageOption[];
 }
 
 export interface SectionImages {
@@ -14,26 +19,29 @@ export interface SectionImages {
   items: SentenceImage[];
 }
 
-// OpenVerse — free CC-licensed image search, no API key required
-// Docs: https://api.openverse.org/v1/
-async function searchOpenVerse(
-  query: string,
-): Promise<{ url: string; thumbnail: string; alt: string } | null> {
+async function searchSerper(query: string, num = 3): Promise<ImageOption[]> {
+  const key = process.env.SERPER_API_KEY;
+  if (!key) return [];
+
   try {
-    const { data } = await axios.get('https://api.openverse.org/v1/images/', {
-      params: { q: query, page_size: 1, license_type: 'commercial,modification' },
-      headers: { 'User-Agent': 'WorldCupDiary/1.0 (news script generator)' },
-      timeout: 8000,
-    });
+    const { data } = await axios.post(
+      'https://google.serper.dev/images',
+      { q: query, num },
+      {
+        headers: { 'X-API-KEY': key, 'Content-Type': 'application/json' },
+        timeout: 8000,
+      },
+    );
 
-    type OVResult = { url: string; thumbnail: string; title: string };
-    const results = (data as { results: OVResult[] }).results;
-    const first = results?.[0];
-    if (!first?.url) return null;
-
-    return { url: first.url, thumbnail: first.thumbnail ?? first.url, alt: first.title || query };
+    type SerperImg = { imageUrl: string; thumbnailUrl: string; title: string; source: string };
+    return ((data as { images: SerperImg[] }).images || []).map((img) => ({
+      url: img.imageUrl,
+      thumbnail: img.thumbnailUrl,
+      alt: img.title || query,
+      source: img.source || '',
+    }));
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -42,13 +50,10 @@ async function searchOpenVerse(
 function parseScriptSections(content: string): { title: string; body: string }[] {
   const sections: { title: string; body: string }[] = [];
   const parts = content.split(/(?=^##\s*SECTION\s*\d+)/im);
-
   for (const part of parts) {
     const match = part.match(/^##\s*(SECTION\s*\d+[^\n]*)/i);
     if (!match) continue;
-    const title = match[1].trim();
-    const body = part.slice(match[0].length).trim();
-    sections.push({ title, body });
+    sections.push({ title: match[1].trim(), body: part.slice(match[0].length).trim() });
   }
   return sections;
 }
@@ -64,10 +69,7 @@ function extractUnits(body: string): string[] {
     if (line.length < 160) {
       units.push(line);
     } else {
-      const sentences = line
-        .split(/(?<=[.!?])\s+(?=[A-Z])/)
-        .filter((s) => s.length > 15);
-      units.push(...sentences);
+      units.push(...line.split(/(?<=[.!?])\s+(?=[A-Z])/).filter((s) => s.length > 15));
     }
   }
   return units;
@@ -76,9 +78,9 @@ function extractUnits(body: string): string[] {
 function extractKeywords(sentence: string): string {
   const proper = (sentence.match(/\b[A-Z][a-zA-Z]{2,}(?:\s+[A-Z][a-zA-Z]{2,})*/g) || []).filter(
     (w) =>
-      !['The', 'This', 'That', 'Welcome', 'And', 'But', 'Now', 'Here', 'Let', 'As', 'In', 'It', 'World', 'Cup'].includes(w),
+      !['The','This','That','Welcome','And','But','Now','Here','Let','As','In','It','World','Cup'].includes(w),
   );
-  const top = proper.slice(0, 2).join(' ');
+  const top = proper.slice(0, 3).join(' ');
   return top ? `${top} football` : 'FIFA World Cup 2026 football';
 }
 
@@ -97,18 +99,12 @@ export async function findImagesForScript(content: string): Promise<SectionImage
       const batchResults = await Promise.all(
         batch.map(async (sentence) => {
           const keywords = extractKeywords(sentence);
-          const img = await searchOpenVerse(keywords);
-          return {
-            sentence,
-            keywords,
-            imageUrl: img?.url ?? null,
-            thumbnail: img?.thumbnail ?? null,
-            imageAlt: img?.alt ?? keywords,
-          };
+          const images = await searchSerper(keywords, 3);
+          return { sentence, keywords, images };
         }),
       );
       items.push(...batchResults);
-      if (i + 5 < units.length) await new Promise((r) => setTimeout(r, 300));
+      if (i + 5 < units.length) await new Promise((r) => setTimeout(r, 200));
     }
 
     result.push({ title: section.title, items });
@@ -117,34 +113,22 @@ export async function findImagesForScript(content: string): Promise<SectionImage
   return result;
 }
 
-export async function createImagesZip(sections: SectionImages[]): Promise<Buffer> {
+export async function createImagesZip(
+  selectedUrls: { url: string; filename: string }[],
+): Promise<Buffer> {
   const zip = new JSZip();
 
-  const tasks: { url: string; path: string }[] = [];
-  sections.forEach((section, sIdx) => {
-    const folder = `S${sIdx + 1}_${section.title.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30)}`;
-    section.items.forEach((item, iIdx) => {
-      if (item.imageUrl) {
-        const ext = item.imageUrl.match(/\.(jpg|jpeg|png|webp|gif)/i)?.[1] ?? 'jpg';
-        tasks.push({
-          url: item.imageUrl,
-          path: `${folder}/${String(iIdx + 1).padStart(2, '0')}.${ext}`,
-        });
-      }
-    });
-  });
-
-  for (let i = 0; i < tasks.length; i += 5) {
+  for (let i = 0; i < selectedUrls.length; i += 5) {
     await Promise.all(
-      tasks.slice(i, i + 5).map(async ({ url, path }) => {
+      selectedUrls.slice(i, i + 5).map(async ({ url, filename }) => {
         try {
           const res = await axios.get<ArrayBuffer>(url, {
             responseType: 'arraybuffer',
             timeout: 10000,
             headers: { 'User-Agent': 'Mozilla/5.0' },
           });
-          zip.file(path, res.data);
-        } catch { /* skip inaccessible images */ }
+          zip.file(filename, res.data);
+        } catch { /* skip inaccessible */ }
       }),
     );
   }

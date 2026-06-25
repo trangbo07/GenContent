@@ -4,7 +4,7 @@ import axios from 'axios';
 import { supabase } from '../lib/supabase';
 import { generateNewsScript, generateCustomScript, CustomSectionNews } from '../services/scriptGenerator';
 import { exportToDocx, exportToPdf } from '../services/exportService';
-import { findImagesForScript, createImagesZip, type SectionImages } from '../services/imageService';
+import { findImagesForScript, createImagesZip } from '../services/imageService';
 import { AppError } from '../middleware/errorHandler';
 
 async function translateChunk(text: string): Promise<string> {
@@ -292,13 +292,13 @@ scriptsRouter.post('/:id/find-images', async (req: Request, res: Response, next:
   }
 });
 
-// POST /api/scripts/:id/download-images  — download all images as ZIP
+// POST /api/scripts/:id/download-images  — ZIP selected images
 scriptsRouter.post('/:id/download-images', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { sections } = req.body as { sections: SectionImages[] };
-    if (!sections || !Array.isArray(sections)) throw new AppError('sections required', 400);
+    const { selected } = req.body as { selected: { url: string; filename: string }[] };
+    if (!selected || !Array.isArray(selected)) throw new AppError('selected required', 400);
 
-    const zipBuffer = await createImagesZip(sections);
+    const zipBuffer = await createImagesZip(selected);
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="images_${req.params.id}.zip"`);
     res.send(zipBuffer);
