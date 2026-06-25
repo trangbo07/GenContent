@@ -101,6 +101,63 @@ function extractKeywords(sentence: string): string {
   return top;
 }
 
+// ─── AI Prompt Generation ────────────────────────────────────────────────────
+
+export interface PromptItem {
+  sentence: string;
+  prompt: string;
+}
+
+export interface SectionPrompts {
+  title: string;
+  items: PromptItem[];
+}
+
+export async function generatePromptsForScript(content: string): Promise<SectionPrompts[]> {
+  const { GoogleGenerativeAI } = await import('@google/generative-ai');
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+  const model = genAI.getGenerativeModel({ model: process.env.AI_MODEL ?? 'gemini-2.5-flash' });
+
+  const sections = parseScriptSections(content);
+  const all: { sIdx: number; sentence: string }[] = [];
+  sections.forEach((sec, sIdx) => extractUnits(sec.body).forEach((s) => all.push({ sIdx, sentence: s })));
+  if (all.length === 0) return [];
+
+  const numbered = all.map((s, i) => `${i + 1}. ${s.sentence}`).join('\n');
+  const aiPrompt = `You are an expert AI image prompt engineer for Midjourney v6.1 and DALL-E 3.
+For each numbered sentence from a FIFA World Cup 2026 sports news broadcast script, write ONE detailed image generation prompt.
+Rules:
+- Describe a specific vivid visual scene (subjects, actions, emotions, colors, setting, crowd, lighting)
+- Always include "FIFA World Cup 2026" context
+- Professional sports photography style, dramatic, cinematic
+- End every prompt with: --ar 16:9 --v 6.1 --style raw
+- Return ONLY the numbered list (1. ... 2. ... etc.), no markdown, no extra text
+
+Sentences:
+${numbered}`;
+
+  let promptLines: string[] = [];
+  try {
+    const result = await model.generateContent(aiPrompt);
+    promptLines = result.response
+      .text()
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => /^\d+\./.test(l))
+      .map((l) => l.replace(/^\d+\.\s*/, '').trim());
+  } catch { /* fallback below */ }
+
+  const sectionResults: SectionPrompts[] = sections.map((sec) => ({ title: sec.title, items: [] }));
+  all.forEach(({ sIdx, sentence }, i) => {
+    const p =
+      promptLines[i] ??
+      `${sentence.trim()}, FIFA World Cup 2026, professional sports photography, dramatic stadium lighting, packed crowd, cinematic, 8K HDR --ar 16:9 --v 6.1 --style raw`;
+    sectionResults[sIdx].items.push({ sentence, prompt: p });
+  });
+
+  return sectionResults.filter((s) => s.items.length > 0);
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function findImagesForScript(content: string): Promise<SectionImages[]> {
