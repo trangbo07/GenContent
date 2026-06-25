@@ -19,27 +19,38 @@ export interface SectionImages {
   items: SentenceImage[];
 }
 
-async function searchSerper(query: string, num = 3): Promise<ImageOption[]> {
-  const key = process.env.SERPER_API_KEY;
-  if (!key) return [];
-
+// Wikipedia API — free, no API key, relevant player/team/tournament images
+async function searchWikipedia(query: string): Promise<ImageOption[]> {
   try {
-    const { data } = await axios.post(
-      'https://google.serper.dev/images',
-      { q: query, num },
-      {
-        headers: { 'X-API-KEY': key, 'Content-Type': 'application/json' },
-        timeout: 8000,
+    const { data } = await axios.get('https://en.wikipedia.org/w/api.php', {
+      params: {
+        action: 'query',
+        generator: 'search',
+        gsrsearch: query,
+        gsrlimit: 5,
+        prop: 'pageimages|info',
+        pithumbsize: 600,
+        inprop: 'url',
+        format: 'json',
+        origin: '*',
       },
+      timeout: 8000,
+    });
+
+    type WikiPage = { title: string; thumbnail?: { source: string }; fullurl?: string };
+    const pages = Object.values(
+      (data as { query?: { pages?: Record<string, WikiPage> } }).query?.pages ?? {},
     );
 
-    type SerperImg = { imageUrl: string; thumbnailUrl: string; title: string; source: string };
-    return ((data as { images: SerperImg[] }).images || []).map((img) => ({
-      url: img.imageUrl,
-      thumbnail: img.thumbnailUrl,
-      alt: img.title || query,
-      source: img.source || '',
-    }));
+    return pages
+      .filter((p) => p.thumbnail?.source)
+      .slice(0, 3)
+      .map((p) => ({
+        url: p.thumbnail!.source.replace(/\/\d+px-/, '/800px-'),
+        thumbnail: p.thumbnail!.source,
+        alt: p.title,
+        source: 'Wikipedia',
+      }));
   } catch {
     return [];
   }
@@ -99,7 +110,7 @@ export async function findImagesForScript(content: string): Promise<SectionImage
       const batchResults = await Promise.all(
         batch.map(async (sentence) => {
           const keywords = extractKeywords(sentence);
-          const images = await searchSerper(keywords, 3);
+          const images = await searchWikipedia(keywords);
           return { sentence, keywords, images };
         }),
       );
