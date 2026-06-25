@@ -14,47 +14,24 @@ export interface SectionImages {
   items: SentenceImage[];
 }
 
-const DDG_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0',
-  'Accept-Language': 'en-US,en;q=0.5',
-};
-
-async function getDDGVqd(query: string): Promise<string | null> {
-  try {
-    const { data } = await axios.get<string>('https://duckduckgo.com/', {
-      params: { q: query, iax: 'images', ia: 'images' },
-      headers: DDG_HEADERS,
-      timeout: 8000,
-    });
-    const match =
-      data.match(/vqd=['"]([^'"]+)['"]/) ||
-      data.match(/vqd=([^&\s"']+)/) ||
-      data.match(/data-vqd=['"]([^'"]+)['"]/);
-    return match ? match[1] : null;
-  } catch {
-    return null;
-  }
-}
-
-async function searchDDG(
+// OpenVerse — free CC-licensed image search, no API key required
+// Docs: https://api.openverse.org/v1/
+async function searchOpenVerse(
   query: string,
 ): Promise<{ url: string; thumbnail: string; alt: string } | null> {
-  const vqd = await getDDGVqd(query);
-  if (!vqd) return null;
-
   try {
-    const { data } = await axios.get('https://duckduckgo.com/i.js', {
-      params: { q: query, o: 'json', p: 1, s: 0, u: 'bing', f: ',,,', l: 'us-en', vqd },
-      headers: { ...DDG_HEADERS, Referer: 'https://duckduckgo.com/' },
+    const { data } = await axios.get('https://api.openverse.org/v1/images/', {
+      params: { q: query, page_size: 1, license_type: 'commercial,modification' },
+      headers: { 'User-Agent': 'WorldCupDiary/1.0 (news script generator)' },
       timeout: 8000,
     });
 
-    type DDGPhoto = { image: string; thumbnail: string; title: string };
-    const results = (data as { results: DDGPhoto[] }).results;
+    type OVResult = { url: string; thumbnail: string; title: string };
+    const results = (data as { results: OVResult[] }).results;
     const first = results?.[0];
-    if (!first?.image) return null;
+    if (!first?.url) return null;
 
-    return { url: first.image, thumbnail: first.thumbnail, alt: first.title || query };
+    return { url: first.url, thumbnail: first.thumbnail ?? first.url, alt: first.title || query };
   } catch {
     return null;
   }
@@ -120,7 +97,7 @@ export async function findImagesForScript(content: string): Promise<SectionImage
       const batchResults = await Promise.all(
         batch.map(async (sentence) => {
           const keywords = extractKeywords(sentence);
-          const img = await searchDDG(keywords);
+          const img = await searchOpenVerse(keywords);
           return {
             sentence,
             keywords,
