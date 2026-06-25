@@ -89,10 +89,16 @@ function extractUnits(body: string): string[] {
 function extractKeywords(sentence: string): string {
   const proper = (sentence.match(/\b[A-Z][a-zA-Z]{2,}(?:\s+[A-Z][a-zA-Z]{2,})*/g) || []).filter(
     (w) =>
-      !['The','This','That','Welcome','And','But','Now','Here','Let','As','In','It','World','Cup'].includes(w),
+      !['The','This','That','Welcome','And','But','Now','Here','Let','As','In','It','With','From','After'].includes(w),
   );
-  const top = proper.slice(0, 3).join(' ');
-  return top ? `${top} football` : 'FIFA World Cup 2026 football';
+  // Use fewer, more specific terms so Wikipedia can find the right article
+  const top = proper.slice(0, 2).join(' ');
+  if (!top) return '2026 FIFA World Cup';
+  // If only generic words remain, add World Cup context
+  if (top.split(' ').every(w => ['World','Cup','Football','Soccer','Group','Match','Game','Team','Player'].includes(w))) {
+    return '2026 FIFA World Cup';
+  }
+  return top;
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
