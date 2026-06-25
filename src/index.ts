@@ -7,11 +7,12 @@ import { matchesRouter } from './routes/matches';
 import { jobsRouter } from './routes/jobs';
 import { errorHandler } from './middleware/errorHandler';
 import { initScheduler } from './schedulers/cronJobs';
+import { corsOptions } from './lib/cors';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }));
+app.use(cors(corsOptions()));
 app.use(express.json());
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
