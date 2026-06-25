@@ -301,7 +301,7 @@ scriptsRouter.post('/:id/find-images', async (req: Request, res: Response, next:
     if (error || !data) throw new AppError('Script not found', 404);
 
     const sections = await findImagesForScript((data as Record<string, unknown>).content as string);
-    const total = sections.reduce((sum, s) => sum + s.items.filter((i) => i.imageUrl).length, 0);
+    const total = sections.reduce((sum, s) => sum + s.items.filter((i) => i.images?.length).length, 0);
     res.json({ sections, total });
   } catch (err) {
     next(err);
