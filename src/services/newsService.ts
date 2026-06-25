@@ -10,13 +10,14 @@ const parser = new Parser({
 });
 
 const RSS_FEEDS = [
-  { url: 'https://bongda24h.vn/rss/tin-tuc-bong-da.rss',             source: 'Bongda24h',        lang: 'vi' },
-  { url: 'https://www.bongdaplus.vn/rss/bong-da.rss',                source: 'BongdaPlus',       lang: 'vi' },
-  { url: 'https://vnexpress.net/rss/bong-da.rss',                    source: 'VnExpress Sport',  lang: 'vi' },
-  { url: 'https://tuoitre.vn/rss/the-thao.rss',                      source: 'Tuổi Trẻ Sport',   lang: 'vi' },
-  { url: 'https://thanhnien.vn/rss/the-thao.rss',                    source: 'Thanh Niên Sport', lang: 'vi' },
-  { url: 'https://dantri.com.vn/the-thao/bong-da.rss',               source: 'Dân Trí Sport',    lang: 'vi' },
-  { url: 'https://www.goal.com/vn/feeds/news?fmt=rss',               source: 'Goal.com VN',      lang: 'vi' },
+  { url: 'https://vnexpress.net/rss/bong-da.rss',                       source: 'VnExpress Sport',     lang: 'vi' },
+  { url: 'https://tuoitre.vn/rss/the-thao.rss',                         source: 'Tuổi Trẻ Sport',      lang: 'vi' },
+  { url: 'https://thanhnien.vn/rss/the-thao.rss',                       source: 'Thanh Niên Sport',    lang: 'vi' },
+  { url: 'https://dantri.com.vn/rss/the-thao.rss',                      source: 'Dân Trí Sport',       lang: 'vi' },
+  { url: 'https://thethaovanhoa.vn/bong-da.rss',                        source: 'Thể Thao Văn Hoá',   lang: 'vi' },
+  { url: 'https://www.24h.com.vn/upload/rss/bongda-the-thao-viet-nam.rss', source: '24h Bóng Đá',     lang: 'vi' },
+  { url: 'https://bongda24h.vn/rss/tin-tuc-bong-da.rss',               source: 'Bongda24h',           lang: 'vi' },
+  { url: 'https://www.bongdaplus.vn/rss/bong-da.rss',                  source: 'BongdaPlus',          lang: 'vi' },
 ];
 
 export interface NewsItem {
