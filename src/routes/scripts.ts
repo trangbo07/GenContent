@@ -4,6 +4,7 @@ import axios from 'axios';
 import { supabase } from '../lib/supabase';
 import { generateNewsScript, generateCustomScript, CustomSectionNews } from '../services/scriptGenerator';
 import { exportToDocx, exportToPdf } from '../services/exportService';
+import { findImagesForScript } from '../services/imageService';
 import { AppError } from '../middleware/errorHandler';
 
 async function translateChunk(text: string): Promise<string> {
@@ -268,6 +269,24 @@ scriptsRouter.post('/regenerate', async (req: Request, res: Response, next: Next
     const { data, error: fetchError } = await supabase.from('scripts').select('*').eq('id', scriptId).single();
     if (fetchError || !data) throw new AppError('Script not found after regeneration', 500);
     res.json(mapScript(data as Record<string, unknown>));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/scripts/:id/find-images
+scriptsRouter.post('/:id/find-images', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { data, error } = await supabase
+      .from('scripts')
+      .select('content')
+      .eq('id', req.params.id)
+      .single();
+    if (error || !data) throw new AppError('Script not found', 404);
+
+    const sections = await findImagesForScript((data as Record<string, unknown>).content as string);
+    const total = sections.reduce((sum, s) => sum + s.items.filter((i) => i.imageUrl).length, 0);
+    res.json({ sections, total });
   } catch (err) {
     next(err);
   }
